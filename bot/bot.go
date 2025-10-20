@@ -13,15 +13,99 @@ import (
 	// "encoding/json"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/tidwall/gjson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"github.com/tidwall/gjson"
 )
 
 var (
 	WeatherApiKey string
 	BotToken string
 	DbUri string
+	
+	defaultMemberPermissions int64 = discordgo.PermissionManageGuild
+
+	// command list
+	commands = []*discordgo.ApplicationCommand{
+
+		{
+			Name: "basic-command",
+			Description: "Test the basic functionality of slash command",
+		},
+
+		{
+			Name: "server-config",
+			Description: "Cmmand for demonstration of default command permisssion",
+			DefaultMemberPermissions: &defaultMemberPermissions,
+		},
+
+		{
+			Name: "options",
+			Description: "for testing options capability in slash commands",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type: discordgo.ApplicationCommandOptionString,
+					Name: "string-option",
+					Description: "string-option",
+					Required: true,
+				},
+				
+				{
+					Type: discordgo.ApplicationCommandOptionInteger,
+					Name: "integer-option",
+				},
+			},
+		},
+	}
+
+	commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
+		"basic-command": func(s *discordgo.Session, i *discordgo.InteractionCreate){
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "Hello this is basic slash command",
+				},
+			})
+		},
+
+		"server-config": func(s *discordgo.Session, i *discordgo.InteractionCreate){
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "Server status: all good \nBot status: all good",
+				},
+			})
+		},
+
+		"options": func(s *discordgo.Session, i *discordgo.InteractionCreate){
+			
+			options :=  i.ApplicationCommandData().Options
+
+			optionsMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
+			for _, opt := range options {
+				optionsMap[opt.Name] = opt
+			}
+			
+			msgformat := "You learned how to use command options! " +
+				"Take a look at the value(s) you entered:\n"
+			margs := make([]interface{}, 0, len(options))
+
+			if opt, ok := optionsMap["string-option"]; ok {
+				margs = append(margs, opt.StringValue())
+				msgformat += "> string-option: %s\n"
+			}
+			
+			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: fmt.Sprintf(
+						msgformat,
+						margs...
+					),
+				},
+			})
+		},
+	}
 )
 
 type User struct {
@@ -42,22 +126,6 @@ type UserMsg struct {
 type Status struct {
 	Status string
 	Content string
-}
-
-func registerCommands(s *discordgo.Session){
-	commands := []*discordgo.ApplicationCommand{
-		{
-			Name: "ping",
-			Description: "Test apakah bot aktif",
-		},
-	}
-
-	for _, cmd := range commands {
-		_, err := s.ApplicationCommandCreate(s.State.User.ID, "", cmd)
-		if err != nil {
-			fmt.Printf("Tidak bisa membuat command %v: %v\n", cmd.Name, err)
-		}
-	}
 }
 
 func dbWrite(content UserMsg) (error) {
@@ -86,32 +154,30 @@ func dbWrite(content UserMsg) (error) {
 	return nil
 }
 
-func Run() {
-	fmt.Printf("bot token: %s\napi key: %s\n", BotToken, WeatherApiKey)
-	
-	// session init
-	discord, err := discordgo.New("Bot " + BotToken)
-	if err != nil {
-		log.Fatal("error in session initialization ", err)
-	}
+func Main() {
+    fmt.Printf("bot token: %s\napi key: %s\n", BotToken, WeatherApiKey)
+    
+    // session init
+    discord, err := discordgo.New("Bot " + BotToken)
+    if err != nil {
+        log.Fatal("error in session initialization ", err)
+    }
 
-	// Event handler
-	discord.AddHandler(newMsg)
+    // Event handler
+    discord.AddHandler(newMsg)
 
-	// Open session
-	ok := discord.Open()
-	if ok != nil {
-		log.Fatal("error when trying to open session")
-	}
-	defer discord.Close()
+    // Open session
+    ok := discord.Open()
+    if ok != nil {
+        log.Fatal("error when trying to open session")
+    }
+    defer discord.Close()
 
-	// slash command
-
-	// bot running
-	fmt.Println("Bot is running....")
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	<-c
+    // bot running
+    fmt.Println("Bot is running....")
+    c := make(chan os.Signal, 1)
+    signal.Notify(c, os.Interrupt)
+    <-c
 }
 
 func newMsg(s *discordgo.Session, m *discordgo.MessageCreate) {
