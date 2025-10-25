@@ -1,111 +1,23 @@
 package bot
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"strings"
-	"time"
 
 	// "encoding/json"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/tidwall/gjson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 var (
 	WeatherApiKey string
 	BotToken string
 	DbUri string
-	
-	defaultMemberPermissions int64 = discordgo.PermissionManageGuild
-
-	// command list
-	commands = []*discordgo.ApplicationCommand{
-
-		{
-			Name: "basic-command",
-			Description: "Test the basic functionality of slash command",
-		},
-
-		{
-			Name: "server-config",
-			Description: "Cmmand for demonstration of default command permisssion",
-			DefaultMemberPermissions: &defaultMemberPermissions,
-		},
-
-		{
-			Name: "options",
-			Description: "for testing options capability in slash commands",
-			Options: []*discordgo.ApplicationCommandOption{
-				{
-					Type: discordgo.ApplicationCommandOptionString,
-					Name: "string-option",
-					Description: "string-option",
-					Required: true,
-				},
-				
-				{
-					Type: discordgo.ApplicationCommandOptionInteger,
-					Name: "integer-option",
-				},
-			},
-		},
-	}
-
-	commandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
-		"basic-command": func(s *discordgo.Session, i *discordgo.InteractionCreate){
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Content: "Hello this is basic slash command",
-				},
-			})
-		},
-
-		"server-config": func(s *discordgo.Session, i *discordgo.InteractionCreate){
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Content: "Server status: all good \nBot status: all good",
-				},
-			})
-		},
-
-		"options": func(s *discordgo.Session, i *discordgo.InteractionCreate){
-			
-			options :=  i.ApplicationCommandData().Options
-
-			optionsMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption, len(options))
-			for _, opt := range options {
-				optionsMap[opt.Name] = opt
-			}
-			
-			msgformat := "You learned how to use command options! " +
-				"Take a look at the value(s) you entered:\n"
-			margs := make([]interface{}, 0, len(options))
-
-			if opt, ok := optionsMap["string-option"]; ok {
-				margs = append(margs, opt.StringValue())
-				msgformat += "> string-option: %s\n"
-			}
-			
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Content: fmt.Sprintf(
-						msgformat,
-						margs...
-					),
-				},
-			})
-		},
-	}
 )
 
 type User struct {
@@ -128,43 +40,12 @@ type Status struct {
 	Content string
 }
 
-func dbWrite(content UserMsg) (error) {
-	clientOptions := options.Client().ApplyURI(DbUri)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	client, err := mongo.Connect(ctx, clientOptions)
-	if err !=  nil {
-		return err
-	}
-
-	fmt.Println("connected to mongoDB Atlas")
-
-	// input
-	collection := client.Database("DiscordBot").Collection("TestData")
-	userInput := content
-	result, err := collection.InsertOne(ctx, userInput)
-	if err != nil {
-		fmt.Println("error in inserting data")
-		return err
-	}
-
-	fmt.Println("succesfully inserting data")
-	fmt.Println(result.InsertedID)
-	return nil
-}
-
 func Main() {
-    fmt.Printf("bot token: %s\napi key: %s\n", BotToken, WeatherApiKey)
-    
     // session init
     discord, err := discordgo.New("Bot " + BotToken)
     if err != nil {
         log.Fatal("error in session initialization ", err)
     }
-
-    // Event handler
-    discord.AddHandler(newMsg)
 
     // Open session
     ok := discord.Open()
@@ -172,6 +53,29 @@ func Main() {
         log.Fatal("error when trying to open session")
     }
     defer discord.Close()
+
+	// Event message handler
+    discord.AddHandler(newMsg)
+
+	// commands initilization
+	commandsList := make([]*discordgo.ApplicationCommand, 0, len(Commands))
+	for key := range Commands {
+		v := Commands[key]
+		vpointer := &v
+		commandsList = append(commandsList, vpointer)
+	}
+
+	for _, command := range commandsList {
+		_, err := discord.ApplicationCommandCreate(discord.State.User.ID, "", command)
+		if err != nil {
+			fmt.Printf("error registering command")
+		} else {
+			fmt.Printf("Succesfully registered %s command\n------------\n", command.Name)
+		}
+	}
+
+	// slash command handler
+	discord.AddHandler(SlashCommandHandler)
 
     // bot running
     fmt.Println("Bot is running....")
@@ -243,6 +147,5 @@ func newMsg(s *discordgo.Session, m *discordgo.MessageCreate) {
 		fmt.Println(string(jsonData))
 		s.ChannelMessageSend(m.ChannelID, string(jsonData))
 	}
-	
 }
 

@@ -32,5 +32,5 @@ func main() {
 	bot.BotToken = BotToken
 	bot.WeatherApiKey = WeatherApiKey
 	bot.DbUri = DbUri
-	bot.Run()
+	bot.Main()
 }
