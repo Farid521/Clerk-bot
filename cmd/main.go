@@ -6,6 +6,7 @@ import (
 )
 
 func main() {
+	
 	// bot initialization
 	config.LoadEnv()
 	src.Main()
