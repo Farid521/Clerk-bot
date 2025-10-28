@@ -34,9 +34,6 @@ func Main() {
     }
     defer discord.Close()
 
-	// Event message handler
-    discord.AddHandler(newMsg)
-
 	// commands initilization
 	commandsList := make([]*discordgo.ApplicationCommand, 0, len(commands.Commands))
 	for key := range commands.Commands {
@@ -53,6 +50,9 @@ func Main() {
 			fmt.Printf("Succesfully registered %s command\n------------\n", command.Name)
 		}
 	}
+
+	// message handler
+    discord.AddHandler(newMsg)
 
 	// slash command handler
 	discord.AddHandler(handlers.SlashCommandHandler)

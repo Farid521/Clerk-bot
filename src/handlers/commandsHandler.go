@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 
+	"clerk-bot/db"
+
 	"github.com/bwmarrin/discordgo"
 )
 
@@ -29,9 +31,13 @@ func SlashCommandHandler (s *discordgo.Session, i *discordgo.InteractionCreate) 
 
 func jadwalKuliah (s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	// accesing database
+	data, err := db.DbRead(db.MethodRead)
+	if err != nil {
+		fmt.Printf("error in database read")
+	}
 	
-	
-	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+
+	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
 			Content: "jadwal kuliah testing",
