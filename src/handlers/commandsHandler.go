@@ -31,7 +31,7 @@ func SlashCommandHandler (s *discordgo.Session, i *discordgo.InteractionCreate) 
 
 func jadwalKuliah (s *discordgo.Session, i *discordgo.InteractionCreate) error {
 	// accesing database
-	data, err := db.DbRead(db.MethodRead)
+	_, err := db.DbRead(db.MethodRead)
 	if err != nil {
 		fmt.Printf("error in database read")
 	}
